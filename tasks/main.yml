@@ -1,14 +1,12 @@
 ---
 - name: Ansible version check
   assert:
-    that: "ansible_version | version_compare('2.5.1', '>=')"
-    msg: "This version of the acme-certificate role must be used with Ansible 2.5.1 or later."
+    that: "ansible_version.string | version_compare('2.6.0', '>=')"
+    msg: "This version of the acme-certificate role must be used with Ansible 2.6.0 or later."
   run_once: True
   tags:
   - issue-tls-certs-newkey
   - issue-tls-certs
-  - create-tls-keys
-  - create-tls-csr
 
 - name: Sanity checks
   assert:
@@ -18,8 +16,33 @@
   tags:
   - issue-tls-certs-newkey
   - issue-tls-certs
-  - create-tls-keys
-  - create-tls-csr
+
+- block:
+  - name: "Test whether old certificate files for domains {{ ', '.join(domains) }} exist"
+    local_action:
+      module: stat
+      path: "{{ keys_path }}/{{ key_name }}.pem"
+    register: old_certificate_exists
+    when: "keys_old_store"
+    run_once: True
+
+  - name: "Copying old certificate files for domains {{ ', '.join(domains) }}"
+    local_action:
+      module: copy
+      src: "{{ keys_path }}/{{ key_name }}{{ item }}"
+      dest: "{{ keys_old_path }}/{{ (ansible_date_time.date ~ '-' ~ ansible_date_time.hour ~ ansible_date_time.minute ~ ansible_date_time.second ~ '-') if keys_old_prepend_timestamp else '' }}{{ key_name }}{{ item }}"
+    with_items:
+    - "-chain.pem"
+    - "-fullchain.pem"
+    - "-rootchain.pem"
+    - "-root.pem"
+    - ".key"
+    - ".pem"
+    when: "keys_old_store and old_certificate_exists.stat.exists"
+    run_once: True
+  tags:
+  - issue-tls-certs-newkey
+  - issue-tls-certs
 
 - block:
   - name: "Creating private key for domains {{ ', '.join(domains) }}"
@@ -27,7 +50,6 @@
     run_once: True
   tags:
   - issue-tls-certs-newkey
-  - create-tls-keys
 
 - block:
   - name: "Creating CSR for domains {{ ', '.join(domains) }}"
@@ -36,8 +58,6 @@
   tags:
   - issue-tls-certs-newkey
   - issue-tls-certs
-  - create-tls-keys
-  - create-tls-csr
 
 - name: "Get root certificate for domains {{ ', '.join(domains) }}"
   local_action:
@@ -52,8 +72,9 @@
 - block:
   - name: "Preparing challenges for domains {{ ', '.join(domains) }}"
     local_action:
-      module: letsencrypt
+      module: acme_certificate
       account_key: "{{ acme_account }}"
+      modify_account: "{{ modify_account }}"
       csr: "{{ keys_path }}{{ key_name }}.csr"
       dest: "{{ keys_path }}{{ key_name }}.pem"
       fullchain_dest: "{{ keys_path }}{{ key_name }}-fullchain.pem"
@@ -63,7 +84,8 @@
       challenge: "{{ challenge }}"
       acme_directory: "{{ acme_directory }}"
       acme_version: "{{ acme_version }}"
-      remaining_days: 91
+      force: yes
+      validate_certs: "{{ validate_certs }}"
     run_once: True
     register: lets_encrypt_challenge
 
@@ -87,8 +109,9 @@
 
   - name: "Getting certificates for domains {{ ', '.join(domains) }}"
     local_action:
-      module: letsencrypt
+      module: acme_certificate
       account_key: "{{ acme_account }}"
+      modify_account: "{{ modify_account }}"
       csr: "{{ keys_path }}{{ key_name }}.csr"
       dest: "{{ keys_path }}{{ key_name }}.pem"
       fullchain_dest: "{{ keys_path }}{{ key_name }}-fullchain.pem"
@@ -98,8 +121,10 @@
       challenge: "{{ challenge }}"
       acme_directory: "{{ acme_directory }}"
       acme_version: "{{ acme_version }}"
-      remaining_days: 91
+      force: yes
       data: "{{ lets_encrypt_challenge }}"
+      deactivate_authzs: "{{ deactivate_authzs }}"
+      validate_certs: "{{ validate_certs }}"
     run_once: True
 
   - name: "Form root chain for domains {{ ', '.join(domains) }}"
@@ -128,6 +153,7 @@
     _raw_params: openssl verify -CAfile "{{ keys_path }}{{ key_name }}-root.pem" -untrusted "{{ keys_path }}{{ key_name }}-chain.pem" "{{ keys_path }}{{ key_name }}.pem"
   changed_when: False
   run_once: True
+  ignore_errors: "{{ not verify_certs }}"
   tags:
   - issue-tls-certs-newkey
   - issue-tls-certs

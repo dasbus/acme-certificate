@@ -4,7 +4,7 @@ Allows to obtain certificates from Let's Encrypt with minimal interaction with t
 
 ## Description
 
-This is an [Ansible](https://github.com/ansible/ansible) role which can use any CA supporting the ACME protocol, such as [Let's Encrypt](https://letsencrypt.org/), to issue TLS/SSL certificates for your server. This role requires Ansible 2.5.1 or newer and is based on the new [letsencrypt module](https://docs.ansible.com/ansible/latest/letsencrypt_module.html) coming with Ansible.
+This is an [Ansible](https://github.com/ansible/ansible) role which can use any CA supporting the ACME protocol, such as [Let's Encrypt](https://letsencrypt.org/), to issue TLS/SSL certificates for your server. This role requires Ansible 2.6.0 or newer and is based on the [acme_certificate module](https://docs.ansible.com/ansible/latest/acme_certificate_module.html) coming with Ansible.
 
 (If you prefer the [acme_compact](https://github.com/felixfontein/acme-compact) based version, you can check out the [acme_compact_version branch](https://github.com/felixfontein/acme-certificate/tree/acme_compact_version).)
 
@@ -30,12 +30,17 @@ These are the main variables:
 - `key_length`: The bitlength to use for RSA private keys. The default is 4096.
 - `key_name`: The basename for storing the keys and certificates. The default is the first domain specified, with `*` replaced by `_`.
 - `keys_path`: Where the keys and certificates are stored. Default value is `"keys/"`.
-- `ocsp_must_staple`: Whether a certificate with the OCSP Must Staple extension is requested. Default value is `False`.
+- `keys_old_path`: Where old keys and certificates should be copied to; used in case `keys_old_store` is true. Default value is `"keys/old/"`.
+- `keys_old_store`: If set to `true`, will make copies of old keys and certificates. The copies will be stored in the directory specified by `keys_old_store`. Default value is `false`.
+- `keys_old_prepend_timestamp`: Whether copies of old keys and certificates should be prepended by the current date and time. Default value is `false`.
+- `ocsp_must_staple`: Whether a certificate with the OCSP Must Staple extension is requested. Default value is `false`.
 - `agreement`: The terms of service document the user agrees to. Default value is `https://letsencrypt.org/documents/LE-SA-v1.2-November-15-2017.pdf`.
 - `acme_directory`: The ACME directory to use. Default is `https://acme-v02.api.letsencrypt.org/directory`, which is the current production ACME v2 endpoint of Let's Encrypt.
 - `acme_version`: The ACME directory's version. Default is 2. Use 1 for ACME v1.
 - `challenge`: The challenge type to use. Should be `http-01` for HTTP challenges (needs access to web server) or `dns-01` for DNS challenges (needs access to DNS provider).
 - `root_certificate`: The root certificate for the ACME directory. Default value is `https://letsencrypt.org/certs/isrgrootx1.pem` for the root certificate of Let's Encrypt.
+- `deactivate_authzs`: Whether `authz`s (authorizations) should be deactivated afterwards. Default value is `true`. Set to `false` to be able to re-use `authz`s.
+- `modify_account`: Whether the ACME account should be created (if it doesn't exist) and the contact data (email address) should be updated. Default value is `true`. Set to `false` if you want to use the `acme_account` module to manage your ACME account.
 
 ### HTTP Challenges
 
